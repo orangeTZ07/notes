@@ -6,7 +6,7 @@
     - 该文本不提供过于基础的问题
 ----
 
-#### web基础知识
+#### web ctf基础知识
 - index.php是做什么的？
 - 如果把index.php删掉了会怎样？
 - index.php只能叫index.php吗？
@@ -14,6 +14,7 @@
 - 传统CMS中为什么建议每个目录下都有一个index.php？
 - 如果传统CMS目录中没有index.php,可能会发生什么？
 - 现代框架中index.php如何处理不访问根目录的url？
+- 什么是序列化和反序列化？
 - 常见文件名后缀在dirsearch中的使用:dirsearch.py -u http://target.com/ -e php,phps(这东西太复古了，攻防世界NO.GFSJ0235那道题用dirsearch扫不出来,bak,zip,txt
 <details>
 <summary> 协议和伪协议 </summary>
@@ -423,7 +424,12 @@ http://61.147.171.103:54210/?file1=php://filter/read=convert.base64-encode/resou
 </details>
 
 <details>
-  <summary>表单中需要 <input type="file" name="upload"> 是什么意思？</summary>
+  <summary>表单中需要
+
+```
+<input type="file" name="upload">
+```
+是什么意思？</summary>
   
   这个东西会生成一个选择框，用来选择文件（点击选择文件）。
   如果看到了有这个html行，就说明很可能存在文件上传点，此时可以考虑文件上传漏洞。
@@ -879,3 +885,30 @@ auto_prepend_file=shell.jpg
 
 </details>
 
+#### 反序列化漏洞
+
+- 为什么有些php只需要上传一个序列化代码，就算php里没看到unserialize()也能进行反序列化？
+- 一般反序列化的作用是什么？
+- 如何手动写一个序列化数据脚本？
+- 什么是反序列化漏洞？
+- 反序列化中常见的魔术方法都有哪些？
+- __wakeup(){}有什么用？
+- 序列化数据中从php7.1以后对于属性的类型不敏感的体现在哪？
+- 为什么最好要对类型为protected和private的属性修改类型为public？
+- 如果序列化字符内有不可打印字符，可能会有什么后果？
+- preg_match和is_valid函数是什么的克星(提示：%00)？
+
+<details>
+<summary>现在来看题</summary>
+
+```php
+class xctf{
+public $flag = '111';
+public function __wakeup(){
+exit('bad requests');
+}
+?code=
+```
+- 为什么首先考虑绕过exit()（即使这里没有任何可见代码表明绕过exit会有用）？
+- 如何绕过这里的exit？
+- 如何构建序列化？
